@@ -12,18 +12,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install deps
+      - name: Install build deps & ccache
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ccache
+          sudo apt-get install -y build-essential ccache wget
 
       - name: Cache ccache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-ccache-${{ hashFiles('**/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-ccache-
+
+      - name: Install CMake 4.0.0
+        run: |
+          # скачиваем оф. инсталлятор CMake 4.0.0 и ставим в /usr/local
+          wget -q https://github.com/Kitware/CMake/releases/download/v4.0.0/cmake-4.0.0-linux-x86_64.sh -O /tmp/cmake-4.sh
+          chmod +x /tmp/cmake-4.sh
+          sudo /tmp/cmake-4.sh --skip-license --prefix=/usr/local
+          cmake --version
 
       - name: Configure (CMake)
         run: |
