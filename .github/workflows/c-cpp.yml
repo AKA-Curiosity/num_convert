@@ -1,29 +1,21 @@
-name: CI — build
+name: Build & Release
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
+    tags:
+      - 'v*' # запускается теге вида v1.0 и т.д.
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install build deps & ccache
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential ccache wget
-
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-
+          sudo apt-get install -y build-essential wget ccache
 
       - name: Install CMake 3.30.2
         run: |
@@ -32,19 +24,29 @@ jobs:
           sudo /tmp/cmake.sh --skip-license --prefix=/usr/local
           cmake --version
 
-      - name: Configure (CMake)
+      - name: Configure and build
         run: |
+          rm -rf build
           mkdir -p build
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
 
-      - name: Build
-        run: cmake --build build --parallel
+      - name: Package binary
+        run: |
+          mkdir -p release
+          cp build/num_convert release/
+          chmod +x release/num_convert
+          cd release && tar -czf num_convert-linux.tar.gz num_convert
 
-      - name: Upload build folder
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build
-          path: build/
+          name: num_convert-linux
+          path: release/num_convert-linux.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/num_convert-linux.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
