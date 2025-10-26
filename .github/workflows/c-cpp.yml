@@ -1,52 +1,67 @@
-name: Build & Release
+name: Auto Build & Release
 
 on:
   push:
-    tags:
-      - 'v*' # запускается теге вида v1.0 и т.д.
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # нужно, чтобы git видел все теги
 
       - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential wget ccache
 
-      - name: Install CMake 3.30.2
+      - name: Install CMake
         run: |
           wget -q https://github.com/Kitware/CMake/releases/download/v3.30.2/cmake-3.30.2-linux-x86_64.sh -O /tmp/cmake.sh
           chmod +x /tmp/cmake.sh
           sudo /tmp/cmake.sh --skip-license --prefix=/usr/local
           cmake --version
 
-      - name: Configure and build
+      - name: Build project
         run: |
           rm -rf build
-          mkdir -p build
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel
 
-      - name: Package binary
+      - name: Prepare release files
         run: |
           mkdir -p release
           cp build/num_convert release/
-          chmod +x release/num_convert
           cd release && tar -czf num_convert-linux.tar.gz num_convert
 
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: num_convert-linux
-          path: release/num_convert-linux.tar.gz
+      - name: Auto-increment version tag
+        id: tagger
+        run: |
+          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $latest"
 
-      - name: Create GitHub Release
+          # Разбиваем vX.Y.Z
+          IFS='.' read -r major minor patch <<< "${latest#v}"
+
+          patch=$((patch + 1))
+          new_tag="v${major}.${minor}.${patch}"
+
+          echo "new_tag=$new_tag" >> $GITHUB_ENV
+          echo "Created new tag: $new_tag"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$new_tag"
+          git push origin "$new_tag"
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release/num_convert-linux.tar.gz
+          tag_name: ${{ env.new_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
