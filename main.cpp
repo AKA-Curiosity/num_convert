@@ -6,7 +6,7 @@ int main() {
     string num;
     int fromBase, toBase;
 
-    cout << "Введите число: ";
+    cout << "Введите число (вместо , надо .): ";
     cin >> num;
     cout << "Введите основание исходной системы (2, 8, 10, 16): ";
     cin >> fromBase;
