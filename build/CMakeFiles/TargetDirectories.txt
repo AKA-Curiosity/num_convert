@@ -1,0 +1,3 @@
+/Users/curiosity/CLionProjects/num_convert/build/CMakeFiles/num_convert.dir
+/Users/curiosity/CLionProjects/num_convert/build/CMakeFiles/edit_cache.dir
+/Users/curiosity/CLionProjects/num_convert/build/CMakeFiles/rebuild_cache.dir

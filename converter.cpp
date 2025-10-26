@@ -37,7 +37,7 @@ std::string fromDecimal(const double num, const int base, const int precision) {
         intStr.push_back(valToChar(intPart % base));
         intPart /= base;
     }
-    std::ranges::reverse(intStr);
+    std::reverse(intStr.begin(), intStr.end());
 
     // Дробная часть
     std::string fracStr;
