@@ -1,4 +1,4 @@
-name: Auto Build & Release
+name: Auto Build & Release (Linux + Windows)
 
 on:
   push:
@@ -12,12 +12,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # нужно, чтобы git видел все теги
+          fetch-depth: 0  # нужно для тегов
 
-      - name: Install deps
+      - name: Install build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential wget ccache
+          sudo apt-get install -y build-essential mingw-w64 wget ccache
 
       - name: Install CMake
         run: |
@@ -26,42 +26,69 @@ jobs:
           sudo /tmp/cmake.sh --skip-license --prefix=/usr/local
           cmake --version
 
-      - name: Build project
+      # ---------------- Linux Build ----------------
+      - name: Build Linux binary
         run: |
           rm -rf build
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel
+          mkdir -p release/linux
+          cp build/num_convert release/linux/num_convert
+          cd release/linux && tar -czf ../num_convert-linux.tar.gz num_convert
 
-      - name: Prepare release files
+      # ---------------- Windows x64 Build ----------------
+      - name: Build Windows x64 binary
         run: |
-          mkdir -p release
-          cp build/num_convert release/
-          cd release && tar -czf num_convert-linux.tar.gz num_convert
+          rm -rf build
+          cmake -S . -B build -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          mkdir -p release/win64
+          cp build/num_convert.exe release/win64/num_convert-x64.exe
+          cd release/win64 && zip ../num_convert-win64.zip num_convert-x64.exe
 
+      # ---------------- Windows x86 Build ----------------
+      - name: Build Windows x86 binary
+        run: |
+          rm -rf build
+          cmake -S . -B build -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          mkdir -p release/win32
+          cp build/num_convert.exe release/win32/num_convert-x86.exe
+          cd release/win32 && zip ../num_convert-win32.zip num_convert-x86.exe
+
+      # ---------------- Auto Tagging ----------------
       - name: Auto-increment version tag
         id: tagger
         run: |
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $latest"
 
-          # Разбиваем vX.Y.Z
           IFS='.' read -r major minor patch <<< "${latest#v}"
-
           patch=$((patch + 1))
           new_tag="v${major}.${minor}.${patch}"
 
           echo "new_tag=$new_tag" >> $GITHUB_ENV
-          echo "Created new tag: $new_tag"
+          echo "Creating new tag: $new_tag"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$new_tag"
           git push origin "$new_tag"
 
+      # ---------------- Publish Release ----------------
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/num_convert-linux.tar.gz
+          files: |
+            release/num_convert-linux.tar.gz
+            release/num_convert-win64.zip
+            release/num_convert-win32.zip
           tag_name: ${{ env.new_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
